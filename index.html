@@ -1,0 +1,764 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>우리 동네 시장 지도</title>
+
+  <style>
+    /* 기본 설정 */
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      font-family: Arial, "Malgun Gothic", sans-serif;
+    }
+
+    /* 화면을 왼쪽과 오른쪽으로 분리 */
+    .container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* 왼쪽 검색 패널 */
+    .sidebar {
+      width: 340px;
+      flex-shrink: 0;
+      padding: 18px;
+      overflow-y: auto;
+      background: #fff;
+      border-right: 1px solid #ddd;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    .description {
+      margin: 0 0 18px;
+      color: #777;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* 탭 버튼 */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    button {
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .tab-button {
+      flex: 1;
+      padding: 11px 5px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #f5f5f5;
+      font-size: 14px;
+    }
+
+    .tab-button.active {
+      color: white;
+      background: #2878e5;
+      border-color: #2878e5;
+    }
+
+    /* 지도 기능 버튼 */
+    .tools {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+
+    .tool-button {
+      padding: 10px 5px;
+      border: 1px solid #ddd;
+      border-radius: 7px;
+      background: white;
+      font-size: 12px;
+    }
+
+    .tool-button.active {
+      color: white;
+      background: #2878e5;
+    }
+
+    /* 상태 및 검색 결과 */
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 22px;
+      margin-bottom: 10px;
+    }
+
+    .result-header h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    #resultCount {
+      color: #777;
+      font-size: 12px;
+    }
+
+    #status {
+      padding: 10px;
+      margin: 0 0 8px;
+      border-radius: 6px;
+      background: #f5f7fa;
+      color: #555;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    #placeList {
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+
+    .place-item {
+      padding: 13px 5px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+
+    .place-item:hover {
+      background: #f4f8ff;
+    }
+
+    .place-name {
+      margin-bottom: 5px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .place-address {
+      color: #777;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    /* 지도는 반드시 너비와 높이가 있어야 함 */
+    #map {
+      position: relative;
+      flex: 1;
+      width: 0;
+      min-width: 0;
+      height: 100%;
+      background: #edf0f4;
+    }
+
+    /* 모바일 화면 */
+    @media (max-width: 600px) {
+      .sidebar {
+        width: 42%;
+        padding: 10px;
+      }
+
+      h1 {
+        font-size: 17px;
+      }
+
+      .tab-button {
+        font-size: 12px;
+      }
+
+      .tool-button {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <!-- 왼쪽 검색 패널 -->
+    <aside class="sidebar">
+      <h1>우리 동네 시장 지도</h1>
+
+      <p class="description">
+        현재 위치 주변의 대형마트와 시장을 찾아보세요.
+      </p>
+
+      <div class="tabs">
+        <button id="martTab" class="tab-button active">
+          대형마트
+        </button>
+        <button id="marketTab" class="tab-button">
+          시장
+        </button>
+      </div>
+
+      <div class="tools">
+        <button id="locationButton" class="tool-button">
+          📍 내 위치
+        </button>
+        <button id="trafficButton" class="tool-button">
+          🚦 교통정보 켜기
+        </button>
+        <button id="circleButton" class="tool-button">
+          ⭕ 원 그리기
+        </button>
+        <button id="lineButton" class="tool-button">
+          📏 선 그리기
+        </button>
+        <button id="polygonButton" class="tool-button">
+          🔺 다각형 그리기
+        </button>
+        <button id="clearButton" class="tool-button">
+          🗑️ 도형 지우기
+        </button>
+      </div>
+
+      <div class="result-header">
+        <h2 id="resultTitle">주변 대형마트</h2>
+        <span id="resultCount">0곳</span>
+      </div>
+
+      <p id="status" role="status" aria-live="polite">
+        카카오 지도를 불러오는 중입니다.
+      </p>
+
+      <ul id="placeList"></ul>
+    </aside>
+
+    <!-- 오른쪽 지도 -->
+    <div id="map"></div>
+  </div>
+
+  <script>
+    // API 키는 카카오 디벨로퍼스의 JavaScript 키를 사용
+    const KAKAO_APP_KEY = "d976377df53252ce86ff34608c35d309";
+
+    // 지도와 검색에 필요한 변수
+    let map = null;
+    let placesService = null;
+    let drawingManager = null;
+    let currentPosition = null;
+    let currentMarker = null;
+
+    let placeMarkers = [];
+    let placeInfoWindows = [];
+    let selectedTab = "MT1";
+    let trafficEnabled = false;
+    let requestNumber = 0;
+    let activeDrawingType = null;
+
+    // 화면 요소
+    const statusElement = document.getElementById("status");
+    const placeList = document.getElementById("placeList");
+    const resultCount = document.getElementById("resultCount");
+    const resultTitle = document.getElementById("resultTitle");
+    const martTab = document.getElementById("martTab");
+    const marketTab = document.getElementById("marketTab");
+    const trafficButton = document.getElementById("trafficButton");
+
+    // 상태 메시지 변경
+    function setStatus(message) {
+      statusElement.textContent = message;
+    }
+
+    // HTML 특수문자를 안전하게 처리
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, function (char) {
+        const entities = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;"
+        };
+        return entities[char];
+      });
+    }
+
+    // SDK를 동적으로 불러와 로딩 완료 후 지도 초기화
+    function loadKakaoSDK() {
+      setStatus("카카오 지도 SDK를 불러오는 중입니다.");
+
+      const script = document.createElement("script");
+
+      script.src =
+        "https://dapi.kakao.com/v2/maps/sdk.js" +
+        "?appkey=" + encodeURIComponent(KAKAO_APP_KEY) +
+        "&libraries=services,drawing" +
+        "&autoload=false";
+
+      script.onload = function () {
+        // SDK 파일을 받은 뒤 지도 모듈 초기화를 기다림
+        if (!window.kakao || !window.kakao.maps) {
+          setStatus("지도 SDK를 초기화할 수 없습니다. API 키 설정을 확인해 주세요.");
+          return;
+        }
+
+        window.kakao.maps.load(function () {
+          try {
+            initializeMap();
+          } catch (error) {
+            console.error("지도 초기화 오류:", error);
+            setStatus("지도 초기화 중 오류가 발생했습니다. F12 Console을 확인해 주세요.");
+          }
+        });
+      };
+
+      script.onerror = function () {
+        setStatus(
+          "지도 SDK 파일을 불러오지 못했습니다. 인터넷 연결, JavaScript 키, 등록된 사이트 도메인을 확인해 주세요."
+        );
+      };
+
+      document.head.appendChild(script);
+    }
+
+    // 지도 SDK 준비가 끝난 후 지도와 기능 초기화
+    function initializeMap() {
+      const initialPosition = new kakao.maps.LatLng(
+        37.5665,
+        126.9780
+      );
+
+      // 지도 영역이 준비된 상태에서 지도 생성
+      map = new kakao.maps.Map(
+        document.getElementById("map"),
+        {
+          center: initialPosition,
+          level: 5
+        }
+      );
+
+      // 장소 검색 서비스
+      placesService = new kakao.maps.services.Places();
+
+      // 도형 그리기 기능 초기화
+      initializeDrawing();
+
+      // 버튼 이벤트 연결
+      martTab.addEventListener("click", function () {
+        changeTab("MT1");
+      });
+
+      marketTab.addEventListener("click", function () {
+        changeTab("MARKET");
+      });
+
+      document.getElementById("locationButton")
+        .addEventListener("click", function () {
+          getCurrentLocation(true);
+        });
+
+      trafficButton.addEventListener("click", toggleTraffic);
+
+      document.getElementById("circleButton")
+        .addEventListener("click", function () {
+          startDrawing("CIRCLE");
+        });
+
+      document.getElementById("lineButton")
+        .addEventListener("click", function () {
+          startDrawing("POLYLINE");
+        });
+
+      document.getElementById("polygonButton")
+        .addEventListener("click", function () {
+          startDrawing("POLYGON");
+        });
+
+      document.getElementById("clearButton")
+        .addEventListener("click", clearDrawings);
+
+      // 지도 생성 이후 현재 위치 권한 요청
+      setStatus("지도 로딩 완료. 현재 위치 권한을 확인합니다.");
+      getCurrentLocation(false);
+    }
+
+    // 현재 위치를 가져와 지도 중심과 마커 설정
+    function getCurrentLocation(moveMap) {
+      if (!map) {
+        setStatus("지도가 아직 준비되지 않았습니다.");
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        setStatus("이 브라우저에서는 현재 위치 기능을 사용할 수 없습니다.");
+        return;
+      }
+
+      setStatus("현재 위치를 확인하고 있습니다. 위치 권한을 허용해 주세요.");
+
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          currentPosition = new kakao.maps.LatLng(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+
+          // 기존 내 위치 마커 제거
+          if (currentMarker) {
+            currentMarker.setMap(null);
+          }
+
+          // 새 위치 마커 표시
+          currentMarker = new kakao.maps.Marker({
+            map: map,
+            position: currentPosition,
+            title: "내 현재 위치"
+          });
+
+          // 현재 위치를 지도 중심으로 이동
+          map.setCenter(currentPosition);
+          map.setLevel(5);
+
+          // 위치 확인 후 현재 탭의 장소 검색
+          searchPlaces();
+        },
+
+        function (error) {
+          console.error("위치 확인 오류:", error);
+
+          if (error.code === 1) {
+            setStatus(
+              "위치 권한이 거부되었습니다. 브라우저의 사이트 설정에서 위치 권한을 허용한 후 '내 위치'를 눌러 주세요."
+            );
+          } else if (error.code === 2) {
+            setStatus(
+              "현재 위치를 확인할 수 없습니다. 기기의 위치 서비스를 확인해 주세요."
+            );
+          } else if (error.code === 3) {
+            setStatus(
+              "위치 확인 시간이 초과되었습니다. '내 위치'를 눌러 다시 시도해 주세요."
+            );
+          } else {
+            setStatus("현재 위치를 가져오지 못했습니다.");
+          }
+        },
+
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    }
+
+    // 탭 변경 및 기존 검색 결과 제거
+    function changeTab(tab) {
+      selectedTab = tab;
+
+      martTab.classList.toggle("active", tab === "MT1");
+      marketTab.classList.toggle("active", tab === "MARKET");
+
+      resultTitle.textContent =
+        tab === "MT1" ? "주변 대형마트" : "주변 시장";
+
+      clearSearchResults();
+
+      if (currentPosition) {
+        searchPlaces();
+      } else {
+        getCurrentLocation(false);
+      }
+    }
+
+    // 장소 검색
+    function searchPlaces() {
+      if (!placesService || !currentPosition) {
+        return;
+      }
+
+      clearSearchResults();
+
+      // 이전 요청 결과가 늦게 도착해 새 탭 결과를 덮지 않도록 구분
+      const thisRequest = ++requestNumber;
+
+      setStatus("현재 위치 주변 장소를 검색하고 있습니다.");
+
+      const options = {
+        location: currentPosition,
+        radius: 5000,
+        sort: kakao.maps.services.SortBy.DISTANCE
+      };
+
+      // 대형마트는 카테고리, 시장은 키워드로 검색
+      const callback = function (data, status, pagination) {
+        if (thisRequest !== requestNumber) {
+          return;
+        }
+
+        showSearchResults(data, status, pagination, thisRequest);
+      };
+
+      if (selectedTab === "MT1") {
+        placesService.categorySearch("MT1", callback, options);
+      } else {
+        placesService.keywordSearch("시장", callback, options);
+      }
+    }
+
+    // 검색 결과를 목록과 지도에 표시
+    function showSearchResults(data, status, pagination, thisRequest) {
+      if (status === kakao.maps.services.Status.ZERO_RESULT) {
+        setStatus("주변 5km 안에 검색 결과가 없습니다.");
+        resultCount.textContent = "0곳";
+        return;
+      }
+
+      if (status !== kakao.maps.services.Status.OK) {
+        setStatus("장소 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        console.error("장소 검색 상태:", status);
+        return;
+      }
+
+      data.forEach(function (place) {
+        addPlace(place);
+      });
+
+      resultCount.textContent = data.length + "곳";
+      setStatus("검색 결과 " + data.length + "곳을 표시했습니다.");
+
+      // 다음 페이지 결과도 같은 탭에서만 표시
+      if (pagination && pagination.hasNextPage) {
+        const moreButton = document.createElement("button");
+        moreButton.className = "tool-button";
+        moreButton.style.width = "100%";
+        moreButton.style.marginTop = "12px";
+        moreButton.textContent = "다음 검색 결과";
+
+        moreButton.addEventListener("click", function () {
+          if (thisRequest === requestNumber) {
+            pagination.nextPage();
+          }
+        });
+
+        placeList.appendChild(moreButton);
+      }
+    }
+
+    // 장소 하나를 지도와 목록에 추가
+    function addPlace(place) {
+      const position = new kakao.maps.LatLng(place.y, place.x);
+      const address =
+        place.road_address_name ||
+        place.address_name ||
+        "주소 정보 없음";
+
+      const marker = new kakao.maps.Marker({
+        map: map,
+        position: position,
+        title: place.place_name
+      });
+
+      const infoWindow = new kakao.maps.InfoWindow({
+        content:
+          '<div style="padding:10px;max-width:240px;">' +
+          '<strong>' + escapeHtml(place.place_name) + '</strong>' +
+          '<div style="margin-top:6px;font-size:12px;line-height:1.5;">' +
+          escapeHtml(address) +
+          '</div></div>'
+      });
+
+      placeMarkers.push(marker);
+      placeInfoWindows.push(infoWindow);
+
+      // 마커 클릭 시 장소 정보 팝업
+      kakao.maps.event.addListener(marker, "click", function () {
+        closeInfoWindows();
+        infoWindow.open(map, marker);
+      });
+
+      // 왼쪽 결과 목록
+      const item = document.createElement("li");
+      item.className = "place-item";
+
+      const name = document.createElement("div");
+      name.className = "place-name";
+      name.textContent = place.place_name;
+
+      const addressElement = document.createElement("div");
+      addressElement.className = "place-address";
+      addressElement.textContent = address;
+
+      item.appendChild(name);
+      item.appendChild(addressElement);
+
+      // 목록 클릭 시 지도 이동 및 팝업 표시
+      item.addEventListener("click", function () {
+        map.panTo(position);
+        closeInfoWindows();
+        infoWindow.open(map, marker);
+      });
+
+      placeList.appendChild(item);
+    }
+
+    // 열려 있는 모든 장소 팝업 닫기
+    function closeInfoWindows() {
+      placeInfoWindows.forEach(function (infoWindow) {
+        infoWindow.close();
+      });
+    }
+
+    // 기존 검색 결과 마커와 목록 제거
+    function clearSearchResults() {
+      requestNumber++;
+
+      placeMarkers.forEach(function (marker) {
+        marker.setMap(null);
+      });
+
+      closeInfoWindows();
+
+      placeMarkers = [];
+      placeInfoWindows = [];
+      placeList.innerHTML = "";
+      resultCount.textContent = "0곳";
+    }
+
+    // 교통정보 표시 전환
+    function toggleTraffic() {
+      if (!map) return;
+
+      trafficEnabled = !trafficEnabled;
+
+      if (trafficEnabled) {
+        map.addOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC);
+        trafficButton.textContent = "🚦 교통정보 끄기";
+        trafficButton.classList.add("active");
+      } else {
+        map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC);
+        trafficButton.textContent = "🚦 교통정보 켜기";
+        trafficButton.classList.remove("active");
+      }
+    }
+
+    // 원, 선, 다각형 그리기 기능 설정
+    function initializeDrawing() {
+      drawingManager = new kakao.maps.drawing.DrawingManager({
+        map: map,
+
+        drawingMode: [
+          kakao.maps.drawing.OverlayType.CIRCLE,
+          kakao.maps.drawing.OverlayType.POLYLINE,
+          kakao.maps.drawing.OverlayType.POLYGON
+        ],
+
+        guideTooltip: ["draw", "draw", "draw"],
+
+        circleOptions: {
+          strokeWeight: 3,
+          strokeColor: "#2878e5",
+          strokeOpacity: 0.9,
+          fillColor: "#75B8FA",
+          fillOpacity: 0.25
+        },
+
+        polylineOptions: {
+          strokeWeight: 3,
+          strokeColor: "#e74c3c",
+          strokeOpacity: 0.9
+        },
+
+        polygonOptions: {
+          strokeWeight: 3,
+          strokeColor: "#2878e5",
+          strokeOpacity: 0.9,
+          fillColor: "#75B8FA",
+          fillOpacity: 0.25
+        }
+      });
+
+      // 도형 그리기가 완료되면 상태 표시
+      kakao.maps.event.addListener(
+        drawingManager,
+        "drawend",
+        function () {
+          setStatus("도형 그리기가 완료되었습니다.");
+          activeDrawingType = null;
+          updateDrawingButtons();
+        }
+      );
+    }
+
+    // 선택한 도형 그리기 시작
+    function startDrawing(type) {
+      if (!drawingManager) {
+        setStatus("그리기 기능이 아직 준비되지 않았습니다.");
+        return;
+      }
+
+      const overlayTypes = kakao.maps.drawing.OverlayType;
+
+      const typeMap = {
+        CIRCLE: overlayTypes.CIRCLE,
+        POLYLINE: overlayTypes.POLYLINE,
+        POLYGON: overlayTypes.POLYGON
+      };
+
+      activeDrawingType = type;
+      drawingManager.select(typeMap[type]);
+      updateDrawingButtons();
+
+      setStatus("지도 위에서 클릭하거나 드래그하여 도형을 그려 보세요.");
+    }
+
+    // 현재 선택된 그리기 버튼 강조
+    function updateDrawingButtons() {
+      const buttonMap = {
+        CIRCLE: "circleButton",
+        POLYLINE: "lineButton",
+        POLYGON: "polygonButton"
+      };
+
+      Object.values(buttonMap).forEach(function (buttonId) {
+        document.getElementById(buttonId).classList.remove("active");
+      });
+
+      if (activeDrawingType) {
+        document.getElementById(buttonMap[activeDrawingType])
+          .classList.add("active");
+      }
+    }
+
+    // 그려진 도형 초기화
+    function clearDrawings() {
+      if (!drawingManager) return;
+
+      drawingManager.cancel();
+
+      const data = drawingManager.getData();
+
+      Object.keys(data).forEach(function (type) {
+        data[type].forEach(function (item) {
+          if (item.target) {
+            item.target.setMap(null);
+          }
+        });
+      });
+
+      activeDrawingType = null;
+      updateDrawingButtons();
+      setStatus("그려진 도형을 모두 지웠습니다.");
+    }
+
+    // 페이지 준비 후 SDK 로딩 시작
+    loadKakaoSDK();
+  </script>
+</body>
+</html>
